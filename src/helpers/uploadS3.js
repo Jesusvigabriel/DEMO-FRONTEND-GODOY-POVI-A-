@@ -13,7 +13,7 @@ async function uploadToS3(fileItem, nameFile) {
   process.env.VUE_APP_AWS_ACCESS_KEY,
   process.env.VUE_APP_AWS_SECRET_KEY
 )
-  //const credentials = new AWS.Credentials('AKIAQCQRB7JT2PCRY4SH', 'SQybrpqz8Xw+PbckbOe03nA+2nSYRElqAVgKhsgU')
+
 
   const S3 = new AWS.S3({credentials})
   console.log('Credential Ok !',)
