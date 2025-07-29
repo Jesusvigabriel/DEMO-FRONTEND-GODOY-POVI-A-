@@ -625,7 +625,10 @@ export default {
 
         subirExcelAS3(excelASubir) {
             var AWS = require('aws-sdk');
-            const credentials = new AWS.Credentials('AKIA4UL5BS455UXSIPRO', '1reT5pqpYsi/3RmM2Zf++d8NHofWWTW6Q+zUjKQp')
+            const credentials = new AWS.Credentials(
+  process.env.VUE_APP_AWS_ACCESS_KEY,
+  process.env.VUE_APP_AWS_SECRET_KEY
+)
             var s3 = new AWS.S3({ credentials })
 
             // const nombreArchivo=`almacenaje-${this.fechaDesde}-al-${this.fechaHasta}-${this.hashExcel}.xlsx`
