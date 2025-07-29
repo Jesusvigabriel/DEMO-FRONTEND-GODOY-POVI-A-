@@ -17,7 +17,7 @@
             contain
             width="40"
             height="40"
-            alt="AreaTech"
+            alt="AreaStock"
             class="ml-2"
           />
         </v-toolbar-title>
