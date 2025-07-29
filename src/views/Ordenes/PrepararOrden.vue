@@ -213,9 +213,13 @@ export default {
 
         console.log('Detalle recibido', respuestaDetalle)
         this.detalle = respuestaDetalle.map(d => {
-          // Conservar las posiciones si vienen en la respuesta
-          const posiciones = d.posiciones || [];
-          
+          const posicionesApi = d.Posiciones || d.posiciones || []
+          const posiciones = posicionesApi.map(p => ({
+            idPosicion: p.IdPosicion || p.idPosicion,
+            cantidad: p.Cantidad || p.cantidad,
+            descripcion: p.Posicion || p.posicion || p.descripcion
+          }))
+
           return {
             ...d,
             validado: false,
@@ -226,12 +230,10 @@ export default {
             CodeEmpresa: d.CodeEmpresa,
             Lote: d.Lote || d.lote || null,
             loteCompleto: d.loteCompleto || d.LoteCompleto || false,
-            // Asegurarse de que las posiciones se conserven
-            posiciones: posiciones,
-            // Si hay posiciones, usar la primera para mostrar por defecto
+            posiciones,
             Posicion: posiciones.length > 0 ? posiciones[0].descripcion : null
-          };
-        });
+          }
+        })
 
         this.$nextTick(() => this.$refs.barcodeArticulo && this.$refs.barcodeArticulo.focus())
       },
