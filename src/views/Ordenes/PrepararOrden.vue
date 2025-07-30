@@ -239,49 +239,93 @@ export default {
       },
 
       async procesarOrden () {
-        // Generar el detalle según lo que espera el backend
-        console.log('INICIO procesarOrden:');
-console.log('Configuración empresa:', this.empresaConfig);
-console.log('Detalle de la orden:', this.detalle);
-let detallePayload = [];
-        if (this.empresaConfig.PART && this.stockPosicionado) {
-  console.log('La orden usa PARTIDA y STOCK POSICIONADO');
-          // Para cada artículo, generar un objeto por cada posición
-          this.detalle.forEach(item => {
-            if (item.posiciones && item.posiciones.length > 0) {
-              item.posiciones.forEach(pos => {
-                detallePayload.push({
-                  IdProducto: item.IdProducto,
-                  Cantidad: item.CantidadSalida,
-                  Barcode: item.Barcode || item.CodeEmpresa,
-                  Lote: item.Lote || item.lote || null,
-                  idPartida: item.IdPartida || item.Partida || item.partida,
-                  IdPosicion: pos.idPosicion
-                });
-              });
-            } else {
-              // Si no tiene posiciones, igual agregar el ítem (por si acaso)
-              detallePayload.push({
+        console.log('🚀 INICIO procesarOrden');
+        console.group('📋 Configuración de la empresa');
+        console.log('ID Empresa:', this.empresaId);
+        console.log('Nombre Empresa:', this.empresaNombre);
+        console.log('Configuración:', JSON.stringify(this.empresaConfig, null, 2));
+        console.groupEnd();
+        
+        console.group('📦 Detalle de la orden');
+        console.table(this.detalle.map(item => ({
+          'Producto': item.NombreProducto,
+          'Barcode': item.Barcode || item.CodeEmpresa,
+          'Cant. Solicitada': item.Unidades,
+          'Cant. a Despachar': item.CantidadSalida,
+          'Lote': item.Lote || '-',
+          'Partida': item.Partida || '-',
+          'Posiciones': item.posiciones?.length || 0
+        })));
+        console.groupEnd();
+        let detallePayload = [];
+        console.group('🔧 Generando payload según tipo de orden');
+        console.log('Tipo de orden detectado:', {
+          'Stock Posicionado': this.stockPosicionado ? 'SI' : 'NO',
+          'Tiene PART': this.empresaConfig.PART ? 'SI' : 'NO',
+          'Tiene LOTE': this.tieneLote ? 'SI' : 'NO'
+        });
+
+        this.detalle.forEach(item => {
+          // Validar que todas las posiciones tengan ID
+          if (item.posiciones && item.posiciones.length > 0) {
+            item.posiciones.forEach(pos => {
+              if (!pos.idPosicion) {
+                console.error('❌ Error: Posición sin ID', { item, pos });
+                throw new Error('Todas las posiciones deben tener un ID válido');
+              }
+
+              // Estructura base común para todos los tipos
+              const itemPayload = {
                 IdProducto: item.IdProducto,
                 Cantidad: item.CantidadSalida,
                 Barcode: item.Barcode || item.CodeEmpresa,
-                Lote: item.Lote || item.lote || null,
-                idPartida: item.IdPartida || item.Partida || item.partida,
-                IdPosicion: null
-              });
-            }
-          });
-        } else {
-          // Lógica para órdenes sin partida o sin stock posicionado (mantener original)
-          detallePayload = this.detalle.map(i => ({
-            IdProducto: i.IdProducto,
-            Cantidad: i.CantidadSalida,
-            Barcode: i.Barcode || i.CodeEmpresa,
-            Lote: i.Lote || i.lote || null
-          }));
-        }
+                posicionId: pos.idPosicion,  // Campo requerido por el backend
+                IdPosicion: pos.idPosicion   // Mantener para compatibilidad
+              };
 
-        console.log('Payload detallePayload generado:', detallePayload);
+              // Tipo 1: Solo stock posicionado
+              if (this.stockPosicionado && !this.empresaConfig.PART && !this.tieneLote) {
+                detallePayload.push({
+                  ...itemPayload,
+                  Lote: null,
+                  idPartida: null
+                });
+              }
+              // Tipo 2: Stock posicionado + Partida
+              else if (this.stockPosicionado && this.empresaConfig.PART) {
+                if (!item.IdPartida && !item.Partida && !item.partida) {
+                  throw new Error('Orden con PARTIDA activada pero falta el ID de partida');
+                }
+                detallePayload.push({
+                  ...itemPayload,
+                  idPartida: item.IdPartida || item.Partida || item.partida,
+                  Lote: this.tieneLote ? (item.Lote || item.lote || null) : null
+                });
+              }
+              // Tipo 3: Stock posicionado + Lote
+              else if (this.stockPosicionado && this.tieneLote) {
+                if (!item.Lote && !item.lote) {
+                  throw new Error('Orden con LOTE activado pero falta el número de lote');
+                }
+                detallePayload.push({
+                  ...itemPayload,
+                  Lote: item.Lote || item.lote,
+                  idPartida: this.empresaConfig.PART ? (item.IdPartida || item.Partida || item.partida || null) : null
+                });
+              }
+            });
+          } else {
+            console.error('❌ Error: Producto sin posiciones definidas', item);
+            throw new Error('Todos los productos deben tener al menos una posición asignada');
+          }
+        });
+        console.groupEnd();
+
+        console.group('📤 Payload generado para el backend');
+        console.log('Tipo de orden:', this.empresaConfig.PART ? 'CON PARTIDA' : 'SIN PARTIDA');
+        console.log('Stock posicionado:', this.stockPosicionado ? 'SI' : 'NO');
+        console.log('Detalle del payload:', JSON.stringify(detallePayload, null, 2));
+        console.groupEnd();
 // Construir el objeto Cabeceras completo
         const Cabeceras = {
           IdOrden: this.idOrden,
@@ -296,8 +340,10 @@ let detallePayload = [];
           Fecha: this.fecha
         }
 
-        console.log('Cabeceras a enviar:', Cabeceras);
-console.log('Payload FINAL enviado a saleOrder:', JSON.stringify({ Cabeceras }, null, 2));
+        console.group('📨 Enviando a saleOrder');
+        console.log('URL del endpoint:', `/empresas/${this.empresaId}/sale-order`);
+        console.log('Cabeceras completas:', JSON.stringify(Cabeceras, null, 2));
+        console.groupEnd();
 
         try {
           if (this.cantidadBultos <= 0) {
@@ -306,7 +352,8 @@ console.log('Payload FINAL enviado a saleOrder:', JSON.stringify({ Cabeceras }, 
           }
           console.log('Enviando saleOrder (remito y/o guía según configuración empresa)')
           await ordenesV3.saleOrder(this.empresaId, { Cabeceras })
-          console.log('saleOrder exitosa, la orden fue procesada en backend')
+          console.log('✅ saleOrder exitosa, la orden fue procesada en backend');
+          console.log('🔄 Actualizando cantidad de bultos:', this.cantidadBultos);
           await ordenesV3.setCantidadBultos(this.idOrden, this.empresaId, this.cantidadBultos)
 
           try {
@@ -326,9 +373,13 @@ console.log('Etiqueta PDF descargada');
           this.resetearEstado()
           this.$router.push('/Ordenes/OrdenesPendientes')
         } catch (e) {
-          console.error('Error en saleOrder', e)
-console.log('Payload que causó el error:', { detallePayload, Cabeceras });
-          store.dispatch('snackbar/mostrar', 'Error al procesar la orden')
+          console.error('❌ Error en saleOrder', e);
+          console.group('🔍 Debug Error');
+          console.log('Mensaje de error:', e.message);
+          console.log('Respuesta del servidor:', e.response?.data);
+          console.log('Payload que causó el error:', { detallePayload, Cabeceras });
+          console.groupEnd();
+          store.dispatch('snackbar/mostrar', `Error al procesar la orden: ${e.message || 'Ver consola para más detalles'}`)
         }
       },
     async descargarExcel () {
